@@ -1,7 +1,6 @@
 import streamlit as st
 import cv2
 import numpy as np
-from qreader import QReader
 
 # Page configuration
 st.set_page_config(page_title="PharmaVerify", layout="centered")
@@ -9,7 +8,7 @@ st.set_page_config(page_title="PharmaVerify", layout="centered")
 st.title("💊 PharmaVerify Portal")
 st.write("Scan or upload a medicine QR code to verify if it is genuine or a counterfeit clone.")
 
-# Neat tabs to separate input types
+# Clear tabs for inputs
 tab1, tab2 = st.tabs(["📸 Live Camera Scan", "📁 Upload Image File"])
 
 img_file = None
@@ -33,37 +32,37 @@ if img_file is not None:
     st.write("---")
     st.subheader("🔍 Scan Status:")
 
-    # Initialize the pure-python QReader engine
-    qreader_engine = QReader()
+    # PREPROCESSING ENGINE: Convert to Grayscale to help the scanner "see" contrast
+    gray_img = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
     
-    # QReader expects an RGB image layout, so convert it from BGR
-    rgb_img = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2RGB)
+    # Enhance contrast using adaptive thresholding (makes blurry matrices sharp)
+    sharpened_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+
+    # Initialize standard OpenCV detector
+    detector = cv2.QRCodeDetector()
     
-    # Read the QR text matrix data
-    data = qreader_engine.detect_and_decode(image=rgb_img)
+    # 1. Try scanning the sharpened black-and-white image
+    data, bbox, _ = detector.detectAndDecode(sharpened_img)
+    
+    # 2. Fallback: Try scanning the raw original image
+    if not data:
+        data, bbox, _ = detector.detectAndDecode(opencv_img)
 
-    # Extract the first decoded string if a list is returned
-    decoded_text = None
-    if data and len(data) > 0 and data[0] is not None:
-        decoded_text = data[0]
-
-    # Fallback: Try a horizontal flip if front camera mirrored it
-    if not decoded_text:
-        mirrored_img = cv2.flip(rgb_img, 1)
-        mirror_data = qreader_engine.detect_and_decode(image=mirrored_img)
-        if mirror_data and len(mirror_data) > 0 and mirror_data[0] is not None:
-            decoded_text = mirror_data[0]
+    # 3. Fallback: Try a mirror flip (for mirrored mobile front cameras)
+    if not data:
+        mirrored_img = cv2.flip(sharpened_img, 1)
+        data, bbox, _ = detector.detectAndDecode(mirrored_img)
 
     # Display Verification Results
-    if decoded_text:
-        st.info(f"💾 Decoded Data String: {decoded_text}")
-        cleaned_data = decoded_text.upper()
+    if data:
+        st.info(f"💾 Decoded Data String: {data}")
+        cleaned_data = data.upper()
         
-        # Validation rules matching your criteria
+        # Validation rules
         if "GENUINE" in cleaned_data or "BATCH2026" in cleaned_data or "VALID" in cleaned_data:
             st.success("✅ VERIFICATION SUCCESSFUL: This medicine is registered and 100% Genuine.")
         else:
             st.error("🚨 WARNING: Unrecognized serial layout! This item is flagged as a Counterfeit Clone.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.warning("The system couldn't find a clear square matrix. Try using the 'Upload Image File' tab with a clear photo taken directly from your main mobile camera app!")
+        st.warning("The camera focus might be too close. Try holding the QR code about 10-15 cm away from the camera, make sure it's well-lit, and take a steady picture!")
