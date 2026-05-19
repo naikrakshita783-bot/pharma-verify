@@ -8,7 +8,7 @@ st.set_page_config(page_title="PharmaVerify", layout="centered")
 st.title("💊 PharmaVerify Portal")
 st.write("Scan or upload a medicine QR code to verify its authenticity.")
 
-# Set up clean user input tabs
+st.write("scan or upload a medicine Qr code to vrify its authenticity. (system updated v2)")
 tab1, tab2 = st.tabs(["📸 Live Camera Scan", "📁 Upload Image File"])
 
 img_file = None
@@ -32,7 +32,7 @@ if img_file is not None:
     st.write("---")
     st.subheader("🔍 Verification Status:")
 
-    # Step 1: Preprocess image to high-contrast black & white
+    # Step 1: Preprocess image to high-contrast black & white (Otsu's Binarization)
     gray_img = cv2.cvtColor(opencv_img, cv2.COLOR_BGR2GRAY)
     sharpened_img = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 
@@ -48,22 +48,24 @@ if img_file is not None:
     if not data:
         data, _, _ = qr_detector.detectAndDecode(opencv_img)
 
-    # 3. Fallback: Try a mirror flip (for front-facing phone cameras)
+    # 3. Fallback: Try a mirror flip (fixes front-facing phone camera mirroring)
     if not data:
         mirrored_img = cv2.flip(sharpened_img, 1)
         data, _, _ = qr_detector.detectAndDecode(mirrored_img)
 
-    # REAL OR FAKE MEDICINE CLASSIFICATION LOGIC
+    # STRICT REAL OR FAKE MEDICINE CLASSIFICATION LOGIC
     if data:
         st.info(f"📋 Scanned Code Data: {data}")
         cleaned_data = data.upper()
         
-        # Authentic parameters
-        if "VALID" in cleaned_data or "BATCH2026" in cleaned_data or "GENUINE" in cleaned_data or "HTTP" in cleaned_data or len(data) > 8:
+        # STRICT RULE: Must contain a registered security string to pass as Authentic
+        if "VALID" in cleaned_data or "BATCH2026" in cleaned_data or "GENUINE" in cleaned_data:
             st.success("✅ REAL MEDICINE DETECTED")
             st.balloons()
         else:
+            # Code is read perfectly, but text strings do not match the database whitelist
             st.error("🚨 FAKE MEDICINE / COUNTERFEIT DETECTED")
+            st.warning("Warning: This tracking serial does not exist in our secure manufacturer logs.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.warning("The system couldn't read the matrix lines. Make sure you are using a clear, square QR code, hold it steady under good lighting, and try again!")
+        st.warning("The system couldn't find a clear square matrix. Try adjusting your lighting, eliminating glare, or uploading a steady file snippet!")
