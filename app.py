@@ -6,40 +6,55 @@ import numpy as np
 st.set_page_config(page_title="PharmaVerify", layout="centered")
 
 st.title("💊 PharmaVerify Portal")
-st.write("Scan a medicine QR code to verify if it is genuine or a counterfeit clone.")
+st.write("Scan or upload a medicine QR code to verify if it is genuine or a counterfeit clone.")
 
-# 1. Create the camera input widget
-img_file = st.camera_input("Position the QR code clearly inside the frame and snap a picture")
+# Create tabs to neatly separate Camera scanning and File uploading
+tab1, tab2 = st.tabs(["📸 Live Camera Scan", "📁 Upload Image File"])
 
+img_file = None
+
+with tab1:
+    camera_input = st.camera_input("Position the QR code clearly and snap a picture")
+    if camera_input:
+        img_file = camera_input
+
+with tab2:
+    file_input = st.file_uploader("Drop your medicine QR image here...", type=["jpg", "jpeg", "png"])
+    if file_input:
+        img_file = file_input
+
+# Process the image if either input receives a file
 if img_file is not None:
-    # 2. Extract raw bytes cleanly from Streamlit buffer
-    bytes_data = img_file.getvalue()
-    opencv_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+    # Read image data bytes cleanly
+    bytes_data = img_file.read()
+    file_bytes = np.frombuffer(bytes_data, np.uint8)
+    opencv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-    # 3. Initialize the QR Code detector
+    st.write("---")
+    st.subheader("🔍 Scan Status:")
+
+    # Initialize OpenCV QR detector
     detector = cv2.QRCodeDetector()
-    
-    # Try reading the image normall
     data, bbox, _ = detector.detectAndDecode(opencv_img)
-    
-    # 4. Fallback: If it fails, flip the image (fixes phone camera mirror issues)
+
+    # Fallback: Mirror flip image if camera reversed it
     if not data:
         mirrored_img = cv2.flip(opencv_img, 1)
         data, bbox, _ = detector.detectAndDecode(mirrored_img)
 
-    # 5. Display the validation logic output
-    st.write("---")
-    st.subheader("🔍 Scan Status:")
-    
+    # Verification Rules
     if data:
-        st.info(f"💾 Decoded Data String: {data}")
-        
-        # Check against system keywords
+        st.info(f"💾 Decoded Data: {data}")
         cleaned_data = data.upper()
         if "GENUINE" in cleaned_data or "BATCH2026" in cleaned_data or "VALID" in cleaned_data:
-            st.success("✅ VERIFICATION SUCCESSFUL: This medicine match is registered and 100% Genuine.")
+            st.success("✅ VERIFICATION SUCCESSFUL: This medicine is registered and 100% Genuine.")
         else:
             st.error("🚨 WARNING: Unrecognized serial layout! This item is flagged as a Counterfeit Clone.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.warning("Tips for a perfect scan:\n* Hold the QR code flat and steady.\n* Make sure your room lighting is bright without glare.\n* Ensure the entire square QR code is inside the box.")
+        st.markdown("""
+        **Tips for a successful scan:**
+        * Ensure the QR code is **completely flat** (wrinkled medicine packaging can distort the matrix lines).
+        * Move your device closer or further away to ensure it's in **sharp focus**.
+        * Avoid overhead light reflections causing a **bright glare** directly on the glossy plastic of the medicine packaging.
+        """)
