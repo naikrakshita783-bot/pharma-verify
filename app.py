@@ -8,7 +8,7 @@ st.set_page_config(page_title="PharmaVerify", layout="centered")
 st.title("💊 PharmaVerify Portal")
 st.write("Scan or upload a medicine QR code to verify if it is genuine or a counterfeit clone.")
 
-# Create tabs to neatly separate Camera scanning and File uploading
+# Clear tabs for inputs
 tab1, tab2 = st.tabs(["📸 Live Camera Scan", "📁 Upload Image File"])
 
 img_file = None
@@ -23,9 +23,8 @@ with tab2:
     if file_input:
         img_file = file_input
 
-# Process the image if either input receives a file
+# Process image if captured
 if img_file is not None:
-    # Read image data bytes cleanly
     bytes_data = img_file.read()
     file_bytes = np.frombuffer(bytes_data, np.uint8)
     opencv_img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -33,28 +32,44 @@ if img_file is not None:
     st.write("---")
     st.subheader("🔍 Scan Status:")
 
-    # Initialize OpenCV QR detector
-    detector = cv2.QRCodeDetector()
-    data, bbox, _ = detector.detectAndDecode(opencv_img)
+    data = None
 
-    # Fallback: Mirror flip image if camera reversed it
+    # 1. Try Advanced WeChat QR Detector (Handles blur, angles, and low-res perfectly)
+    try:
+        detector = cv2.wechat_qrcode_WeChatQRCode()
+        res, points = detector.detectAndDecode(opencv_img)
+        if res:
+            data = res[0]
+    except Exception:
+        pass
+
+    # 2. Fallback to standard detector if WeChat didn't pick it up
+    if not data:
+        standard_detector = cv2.QRCodeDetector()
+        data, bbox, _ = standard_detector.detectAndDecode(opencv_img)
+
+    # 3. Second Fallback: Mirror flip image for front-facing phone cameras
     if not data:
         mirrored_img = cv2.flip(opencv_img, 1)
-        data, bbox, _ = detector.detectAndDecode(mirrored_img)
+        try:
+            detector = cv2.wechat_qrcode_WeChatQRCode()
+            res, points = detector.detectAndDecode(mirrored_img)
+            if res:
+                data = res[0]
+        except Exception:
+            standard_detector = cv2.QRCodeDetector()
+            data, bbox, _ = standard_detector.detectAndDecode(mirrored_img)
 
-    # Verification Rules
+    # 4. Display Verification Results
     if data:
-        st.info(f"💾 Decoded Data: {data}")
+        st.info(f"💾 Decoded Data String: {data}")
         cleaned_data = data.upper()
+        
+        # Check against validation rules
         if "GENUINE" in cleaned_data or "BATCH2026" in cleaned_data or "VALID" in cleaned_data:
             st.success("✅ VERIFICATION SUCCESSFUL: This medicine is registered and 100% Genuine.")
         else:
             st.error("🚨 WARNING: Unrecognized serial layout! This item is flagged as a Counterfeit Clone.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.markdown("""
-        **Tips for a successful scan:**
-        * Ensure the QR code is **completely flat** (wrinkled medicine packaging can distort the matrix lines).
-        * Move your device closer or further away to ensure it's in **sharp focus**.
-        * Avoid overhead light reflections causing a **bright glare** directly on the glossy plastic of the medicine packaging.
-        """)
+        st.warning("The system couldn't find a clear square QR matrix. Try moving your camera slightly further away for a sharper focus, or use the 'Upload Image File' tab with a clean phone photo!")
