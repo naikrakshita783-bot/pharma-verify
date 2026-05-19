@@ -3,14 +3,13 @@ import cv2
 import numpy as np
 
 # Page configuration
-st.set_page_config(page_title="PharmaVerify", layout="centered")
+st.set_page_config(page_title="PharmaVerify Portal", layout="centered")
 
 st.title("💊 PharmaVerify Portal")
-st.write("Scan or upload a medicine QR code to verify its authenticity.")
+st.write("Scan or upload a medicine QR code for automatic authentication checking.")
 
-st.write("scan or upload a medicine Qr code to vrify its authenticity. (system updated v2)")
+# Layout Tabs
 tab1, tab2 = st.tabs(["📸 Live Camera Scan", "📁 Upload Image File"])
-
 img_file = None
 
 with tab1:
@@ -19,7 +18,7 @@ with tab1:
         img_file = camera_input
 
 with tab2:
-    file_input = st.file_uploader("Drop your medicine image code here...", type=["jpg", "jpeg", "png"])
+    file_input = st.file_uploader("Drop your medicine image file here...", type=["jpg", "jpeg", "png"])
     if file_input:
         img_file = file_input
 
@@ -53,19 +52,20 @@ if img_file is not None:
         mirrored_img = cv2.flip(sharpened_img, 1)
         data, _, _ = qr_detector.detectAndDecode(mirrored_img)
 
-    # STRICT REAL OR FAKE MEDICINE CLASSIFICATION LOGIC
+    # ---- AUTOMATIC VERIFICATION LOGIC (MOCK DATABASE) ----
     if data:
         st.info(f"📋 Scanned Code Data: {data}")
         cleaned_data = data.upper()
         
-        # STRICT RULE: Must contain a registered security string to pass as Authentic
-        if "VALID" in cleaned_data or "BATCH2026" in cleaned_data or "GENUINE" in cleaned_data:
+        # This is your automated database whitelist.
+        # If the code matches these simulated authentic patterns, it passes!
+        if "BATCH2026" in cleaned_data or "VALID" in cleaned_data or "JNJ" in cleaned_data or "GENUINE" in cleaned_data:
             st.success("✅ REAL MEDICINE DETECTED")
             st.balloons()
         else:
-            # Code is read perfectly, but text strings do not match the database whitelist
+            # If the code works but isn't registered in our whitelist, it is automatically flagged as fake!
             st.error("🚨 FAKE MEDICINE / COUNTERFEIT DETECTED")
-            st.warning("Warning: This tracking serial does not exist in our secure manufacturer logs.")
+            st.warning("Security Warning: This serial data structure is not registered in our manufacturer database.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.warning("The system couldn't find a clear square matrix. Try adjusting your lighting, eliminating glare, or uploading a steady file snippet!")
+        st.warning("The system couldn't find a clear square matrix. Try adjusting your lighting or uploading a steady file snippet!")
