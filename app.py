@@ -1,6 +1,7 @@
 import streamlit as st
 import cv2
 import numpy as np
+from pyzbar.pyzbar import decode
 
 # Page configuration
 st.set_page_config(page_title="PharmaVerify", layout="centered")
@@ -34,42 +35,29 @@ if img_file is not None:
 
     data = None
 
-    # 1. Try Advanced WeChat QR Detector (Handles blur, angles, and low-res perfectly)
-    try:
-        detector = cv2.wechat_qrcode_WeChatQRCode()
-        res, points = detector.detectAndDecode(opencv_img)
-        if res:
-            data = res[0]
-    except Exception:
-        pass
-
-    # 2. Fallback to standard detector if WeChat didn't pick it up
-    if not data:
-        standard_detector = cv2.QRCodeDetector()
-        data, bbox, _ = standard_detector.detectAndDecode(opencv_img)
-
-    # 3. Second Fallback: Mirror flip image for front-facing phone cameras
+    # 1. Use PyZbar to decode the QR layout matrix cleanly
+    detected_codes = decode(opencv_img)
+    
+    if detected_codes:
+        data = detected_codes[0].data.decode("utf-8")
+    
+    # 2. Fallback: Mirror flip image for front-facing phone cameras
     if not data:
         mirrored_img = cv2.flip(opencv_img, 1)
-        try:
-            detector = cv2.wechat_qrcode_WeChatQRCode()
-            res, points = detector.detectAndDecode(mirrored_img)
-            if res:
-                data = res[0]
-        except Exception:
-            standard_detector = cv2.QRCodeDetector()
-            data, bbox, _ = standard_detector.detectAndDecode(mirrored_img)
+        detected_codes_mirror = decode(mirrored_img)
+        if detected_codes_mirror:
+            data = detected_codes_mirror[0].data.decode("utf-8")
 
-    # 4. Display Verification Results
+    # 3. Display Verification Results
     if data:
         st.info(f"💾 Decoded Data String: {data}")
         cleaned_data = data.upper()
         
-        # Check against validation rules
+        # Validation rules
         if "GENUINE" in cleaned_data or "BATCH2026" in cleaned_data or "VALID" in cleaned_data:
             st.success("✅ VERIFICATION SUCCESSFUL: This medicine is registered and 100% Genuine.")
         else:
             st.error("🚨 WARNING: Unrecognized serial layout! This item is flagged as a Counterfeit Clone.")
     else:
         st.error("❌ Scan Failed: Could not parse a valid QR layout matrix.")
-        st.warning("The system couldn't find a clear square QR matrix. Try moving your camera slightly further away for a sharper focus, or use the 'Upload Image File' tab with a clean phone photo!")
+        st.warning("The system couldn't find a clear square QR matrix. Try using the 'Upload Image File' tab with a sharp, clear photo taken from your native phone camera app!")
